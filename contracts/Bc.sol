@@ -1,12 +1,14 @@
 pragma solidity ^0.8.9;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "hardhat/console.sol";
 
 contract Bc is Ownable {
     struct Match {
         bool isActive;
         uint256 price;
         uint256 endAt;
+        uint256 royalties;
     }
 
     struct MatchData {
@@ -69,21 +71,58 @@ contract Bc is Ownable {
             idData[_id].inEquality += _leverage;
         }
 
-        idData[_id].pricePool += msg.value;
+        uint256 royalties = (msg.value * _match.royalties) / 100;
+        payable(owner()).transfer(royalties);
+
+        idData[_id].pricePool += msg.value - royalties;
         idAddressBetLeverage[_id][msg.sender][_betId] += _leverage;
 
         idAddressNbrbet[_id][msg.sender]++;
     }
 
-    function claim(uint256 _id) public {}
+    function claim(uint256 _id, uint256 _betId) public {
+        ResultMatch memory _resultM = idResult[_id];
+        require(
+            _resultM.equality || _resultM.winA || _resultM.winB,
+            "no result"
+        );
+        ResultMatch memory _resultU = idAddressBetResult[_id][msg.sender][
+            _betId
+        ];
+        require(_resultU.winA || _resultU.winB || _resultU.equality, "no bet");
+        require(matchId[_id].endAt < block.timestamp, "out time");
+
+        MatchData memory _data = idData[_id];
+        uint256 place;
+        if (_resultM.winA) {
+            place = _data.inA / _data.pricePool;
+        } else if (_resultM.winB) {
+            place = _data.inB / _data.pricePool;
+        } else if (_resultM.equality) {
+            place = _data.inEquality / _data.pricePool;
+        }
+
+        uint256 gain = place * idAddressBetLeverage[_id][msg.sender][_betId];
+        payable(msg.sender).transfer(gain);
+    }
 
     function setMatch(
         uint256 _id,
         bool _isActive,
         uint256 _price,
-        uint256 _endAt
+        uint256 _endAt,
+        uint256 _royalties
     ) public onlyOwner {
-        matchId[_id] = Match(_isActive, _price, _endAt);
+        matchId[_id] = Match(_isActive, _price, _endAt, _royalties);
+    }
+
+    function setResult(
+        uint256 _id,
+        bool _winA,
+        bool _winB,
+        bool _equality
+    ) public onlyOwner {
+        idResult[_id] = ResultMatch(_winA, _winB, _equality);
     }
 
     function getTimestamp() external view returns (uint256) {
