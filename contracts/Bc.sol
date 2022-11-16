@@ -122,6 +122,12 @@ contract Bc is Ownable {
         bool _winB,
         bool _equality
     ) public onlyOwner {
+        require(
+            (_winA && !_winB && !_equality) ||
+                (!_winA && _winB && !_equality) ||
+                (!_winA && !_winB && _equality),
+            "wrong logic"
+        );
         idResult[_id] = ResultMatch(_winA, _winB, _equality);
     }
 

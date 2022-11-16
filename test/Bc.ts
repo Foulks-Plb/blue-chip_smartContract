@@ -53,7 +53,6 @@ describe('nft contract', function () {
 
 
   describe('bet on match', function () {
-
     beforeEach(async function () {
       [owner, addr1, addr2, addr3, ...addrs] = await ethers.getSigners();
       precontract = await ethers.getContractFactory('Bc');
@@ -193,5 +192,30 @@ describe('nft contract', function () {
  
       await expect(contract.connect(addr1).bet(6, 1, true, false, false, { value: 1})).to.be.revertedWith("out time");
     });
+  });
+
+  describe('set score', function () {
+    beforeEach(async function () {
+      [owner, addr1, addr2, addr3, ...addrs] = await ethers.getSigners();
+      precontract = await ethers.getContractFactory('Bc');
+      contract = await precontract.deploy();
+      const time = Number((await contract.getTimestamp()).toString()) + 1000;
+      await contract.connect(owner).setMatch(0, true, 2, time, 10)
+      await contract.connect(owner).setMatch(1, true, 4, time, 10)
+    });
+
+    it('Should set score by owner', async function () {      
+        await contract.connect(owner).setResult(0, true, false, false)
+        await contract.connect(owner).setResult(1, false, false, true)
+    });
+
+    it('Should not set score if is not owner', async function () {      
+      await expect(contract.connect(addr1).setResult(0, false, false, true)).to.be.revertedWith("Ownable: caller is not the owner");
+    });
+
+    it('Should not set score with multiple team win', async function () {      
+      await expect(contract.connect(owner).setResult(0, true, false, true)).to.be.revertedWith("wrong logic");
+    });
+
   });
 });
