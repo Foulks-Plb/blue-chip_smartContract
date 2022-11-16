@@ -1,9 +1,10 @@
-import { time, loadFixture } from "@nomicfoundation/hardhat-network-helpers";
+import { time, loadFixture, } from "@nomicfoundation/hardhat-network-helpers";
 import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { expect } from "chai";
-import { ethers } from "hardhat";
+import { ethers, network } from "hardhat";
 import { Bc__factory } from "../typechain-types";
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
+
 import { BigNumber, Contract } from 'ethers';
 
 
@@ -187,8 +188,11 @@ describe('nft contract', function () {
     });
 
     it('Should execute transaction with royalties', async function () {  
-      const time = Number((await contract.getTimestamp()).toString()) - 1;
+      const time = Number((await contract.getTimestamp()).toString()) + 1000;
       await contract.connect(owner).setMatch(6, true, 1, time, 10)
+
+      await network.provider.send("evm_increaseTime", [1100]);
+      await network.provider.send("evm_mine"); 
  
       await expect(contract.connect(addr1).bet(6, 1, true, false, false, { value: 1})).to.be.revertedWith("out time");
     });
@@ -215,6 +219,30 @@ describe('nft contract', function () {
 
     it('Should not set score with multiple team win', async function () {      
       await expect(contract.connect(owner).setResult(0, true, false, true)).to.be.revertedWith("wrong logic");
+    });
+  });
+
+  describe('claim', function () {
+    beforeEach(async function () {
+      [owner, addr1, addr2, addr3, ...addrs] = await ethers.getSigners();
+      precontract = await ethers.getContractFactory('Bc');
+      contract = await precontract.deploy();
+      const time = Number((await contract.getTimestamp()).toString()) + 1000;
+      await contract.connect(owner).setMatch(0, true, 100, time, 10)
+
+      await contract.connect(addr1).bet(0, 1, true, false, false, { value: 100})
+      await contract.connect(addr1).bet(0, 2, true, false, false, { value: 200})
+      await contract.connect(addr2).bet(0, 3, false, true, false, { value: 300})
+      await contract.connect(addr3).bet(0, 5, false, false, true, { value: 500})
+      await contract.connect(owner).bet(0, 1, true, false, false, { value: 100})
+      await contract.connect(owner).setResult(0, true, false, false)
+    });
+
+    it('Should claim normaly', async function () { 
+      await network.provider.send("evm_increaseTime", [1100]);
+      await network.provider.send("evm_mine");    
+      await contract.connect(addr1).claim(0, 0);
+      // 270
     });
 
   });
