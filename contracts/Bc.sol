@@ -22,11 +22,16 @@ contract Bc is Ownable {
         bool equality;
     }
 
-    mapping(uint256 => Match) public idToMatch;
-    mapping(uint256 => ResultMatch) public idToResult;
-    mapping(uint256 => MatchData) public idToMatchData;
-    mapping(uint256 => mapping(address => ResultMatch)) public addressToResult;
-    mapping(uint256 => mapping(address => uint256)) public addressLeverage;
+    mapping(uint256 => Match) public matchId;
+    mapping(uint256 => ResultMatch) public idResult;
+    mapping(uint256 => MatchData) public idData;
+
+    mapping(uint256 => mapping(address => uint256)) public idAddressNbrbet;
+    mapping(uint256 => mapping(address => mapping(uint256 => ResultMatch)))
+        public idAddressBetResult;
+
+    mapping(uint256 => mapping(address => mapping(uint256 => uint256)))
+        public idAddressBetLeverage;
 
     constructor() {}
 
@@ -37,7 +42,7 @@ contract Bc is Ownable {
         bool _winB,
         bool _equality
     ) public payable {
-        Match memory _match = idToMatch[_id];
+        Match memory _match = matchId[_id];
 
         require(_match.isActive, "not active");
         require(_match.endAt > block.timestamp, "out time");
@@ -49,19 +54,25 @@ contract Bc is Ownable {
             "wrong logic"
         );
 
-        addressToResult[_id][msg.sender] = ResultMatch(_winA, _winB, _equality);
-        // a verifier
-        idToMatchData[_id].pricePool += msg.value;
-        addressLeverage[_id][msg.sender] += _leverage;
+        uint256 _betId = idAddressNbrbet[_id][msg.sender];
+        idAddressBetResult[_id][msg.sender][_betId] = ResultMatch(
+            _winA,
+            _winB,
+            _equality
+        );
 
-        // a verifier
         if (_winA) {
-            idToMatchData[_id].inA += _leverage;
+            idData[_id].inA += _leverage;
         } else if (_winB) {
-            idToMatchData[_id].inB += _leverage;
+            idData[_id].inB += _leverage;
         } else if (_equality) {
-            idToMatchData[_id].inEquality += _leverage;
+            idData[_id].inEquality += _leverage;
         }
+
+        idData[_id].pricePool += msg.value;
+        idAddressBetLeverage[_id][msg.sender][_betId] += _leverage;
+
+        idAddressNbrbet[_id][msg.sender]++;
     }
 
     function claim(uint256 _id) public {}
@@ -72,7 +83,7 @@ contract Bc is Ownable {
         uint256 _price,
         uint256 _endAt
     ) public onlyOwner {
-        idToMatch[_id] = Match(_isActive, _price, _endAt);
+        matchId[_id] = Match(_isActive, _price, _endAt);
     }
 
     function getTimestamp() external view returns (uint256) {
