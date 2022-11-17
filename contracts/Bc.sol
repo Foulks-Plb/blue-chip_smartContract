@@ -35,6 +35,8 @@ contract Bc is Ownable {
     mapping(uint256 => mapping(address => mapping(uint256 => uint256)))
         public idAddressBetLeverage;
 
+    mapping(uint256 => mapping(address => mapping(uint256 => bool)))
+        public idAddressBetIsClaim;
     modifier idGoodLogic(
         bool _winA,
         bool _winB,
@@ -99,6 +101,7 @@ contract Bc is Ownable {
                 _resultU.equality == _resultM.equality,
             "not eligible"
         );
+        require(!idAddressBetIsClaim[_id][msg.sender][_betId], "already claim");
         require(matchId[_id].endAt < block.timestamp, "out time");
 
         MatchData memory _data = idData[_id];
@@ -111,6 +114,7 @@ contract Bc is Ownable {
             place = _data.pricePool / _data.inEquality;
         }
 
+        idAddressBetIsClaim[_id][msg.sender][_betId] = true;
         uint256 gain = place * idAddressBetLeverage[_id][msg.sender][_betId];
         payable(msg.sender).transfer(gain);
     }

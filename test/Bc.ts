@@ -180,11 +180,15 @@ describe('nft contract', function () {
       await contract.connect(owner).setMatch(5, true, ethers.utils.parseEther("1"), time, 10)
 
       expect(await ethers.provider.getBalance(contract.address)).to.equal(0);
-      
+
+      const walletOwnerS = Number(ethers.utils.formatEther(await ethers.provider.getBalance(owner.address)))
+
       await contract.connect(addr1).bet(5, 2, false, false, true, { value: ethers.utils.parseEther("2")})
       expect(await ethers.provider.getBalance(contract.address)).to.equal(ethers.utils.parseEther((2 - 0.2).toString()));
       expect((await contract.connect(owner).idData(5)).pricePool).to.equal(ethers.utils.parseEther((2 - 0.2).toString()));
-      // console.log("verify owner get royalties")
+
+      const walletOwnerE = Number(ethers.utils.formatEther(await ethers.provider.getBalance(owner.address)))
+      expect(Number((walletOwnerE - walletOwnerS).toFixed(1))).to.equal(0.2)
     });
 
     it('Should execute transaction with royalties', async function () {  
@@ -236,13 +240,57 @@ describe('nft contract', function () {
       await contract.connect(addr3).bet(0, 5, false, false, true, { value: 500})
       await contract.connect(owner).bet(0, 1, true, false, false, { value: 100})
       await contract.connect(owner).setResult(0, true, false, false)
+      await network.provider.send("evm_increaseTime", [1100]);
+      await network.provider.send("evm_mine"); 
     });
 
-    it('Should claim normaly', async function () { 
-      await network.provider.send("evm_increaseTime", [1100]);
-      await network.provider.send("evm_mine");    
+    it('Should claim normaly', async function () {    
+      expect(await ethers.provider.getBalance(contract.address)).to.equal(1080); 
       await contract.connect(addr1).claim(0, 0);
-      // 270
+      expect(await ethers.provider.getBalance(contract.address)).to.equal(1080 - 270); 
+
+      await contract.connect(addr1).claim(0, 1); 
+      expect(await ethers.provider.getBalance(contract.address)).to.equal(1080 - 270 - 540); 
+
+      await expect(contract.connect(addr2).claim(0, 0)).to.be.revertedWith("not eligible"); 
+      expect(await ethers.provider.getBalance(contract.address)).to.equal(1080 - 270 - 540); 
+
+      await expect(contract.connect(addr3).claim(0, 0)).to.be.revertedWith("not eligible"); 
+      expect(await ethers.provider.getBalance(contract.address)).to.equal(1080 - 270 - 540); 
+
+      await contract.connect(owner).claim(0, 0)
+      expect(await ethers.provider.getBalance(contract.address)).to.equal(0); 
+    });
+
+    it('Should cant claim with wrong result', async function () { 
+      expect(await ethers.provider.getBalance(contract.address)).to.equal(1080); 
+      await expect(contract.connect(addr3).claim(0, 0)).to.be.revertedWith("not eligible"); 
+      expect(await ethers.provider.getBalance(contract.address)).to.equal(1080); 
+    });
+
+    it('Should cant claim two time', async function () { 
+      expect(await ethers.provider.getBalance(contract.address)).to.equal(1080); 
+      await contract.connect(addr1).claim(0, 0);
+      expect(await ethers.provider.getBalance(contract.address)).to.equal(1080 - 270);  
+      await expect(contract.connect(addr1).claim(0, 0)).to.be.revertedWith("already claim"); 
+      expect(await ethers.provider.getBalance(contract.address)).to.equal(1080 - 270); 
+    });
+
+    
+
+    it('Should cant claim with no result', async function () { 
+      const time = Number((await contract.getTimestamp()).toString()) + 1000;
+      await contract.connect(owner).setMatch(5, true, 100, time, 10)
+      await contract.connect(addr1).bet(5, 1, true, false, false, { value: 100})
+      await expect(contract.connect(addr1).claim(5, 0)).to.be.revertedWith("not eligible");
+    });
+
+    it('Should cant claim if time nor start', async function () { 
+      const time = Number((await contract.getTimestamp()).toString()) + 1000;
+      await contract.connect(owner).setMatch(6, true, 100, time, 10)
+      await contract.connect(addr1).bet(6, 1, true, false, false, { value: 100})
+      await contract.connect(owner).setResult(6, true, false, false)
+      await expect(contract.connect(addr1).claim(6, 0)).to.be.revertedWith("out time");
     });
 
   });
