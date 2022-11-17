@@ -4,6 +4,8 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "hardhat/console.sol";
 
 contract Bc is Ownable {
+    event Bet(address indexed from, uint256 indexed id, uint256 _value);
+
     struct Match {
         bool isActive;
         uint256 price;
@@ -83,6 +85,7 @@ contract Bc is Ownable {
 
         uint256 royalties = (msg.value * _match.royalties) / 100;
         payable(owner()).transfer(royalties);
+        emit Bet(msg.sender, _id, msg.value);
 
         idData[_id].pricePool += msg.value - royalties;
         idAddressBetLeverage[_id][msg.sender][_betId] += _leverage;
