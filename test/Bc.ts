@@ -7,7 +7,6 @@ import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 
 import { BigNumber, Contract } from 'ethers';
 
-
 describe('nft contract', function () {
   let precontract: any;
   let contract: Contract;
@@ -17,20 +16,17 @@ describe('nft contract', function () {
   let addr3: SignerWithAddress;
   let addrs: SignerWithAddress[];
 
-
   beforeEach(async function () {
       [owner, addr1, addr2, addr3, ...addrs] = await ethers.getSigners();
       precontract = await ethers.getContractFactory('Bc');
       contract = await precontract.deploy();
   });
 
-
   describe('Deployment', function () {
       it('Should set the right owner', async function () {
           expect(await contract.owner()).to.equal(owner.address);
       });
   });
-
 
   describe('Create match', function () {
     it('Should set match only by owner', async function () {
@@ -51,7 +47,6 @@ describe('nft contract', function () {
       await expect(contract.connect(addr1).setMatch(0, true, 2, time, 10)).to.be.revertedWith("Ownable: caller is not the owner");
     });
   });
-
 
   describe('bet on match', function () {
     beforeEach(async function () {
@@ -168,6 +163,7 @@ describe('nft contract', function () {
 
     it('Should not bet if wrong logic', async function () {   
       await expect(contract.connect(addr3).bet(0, 1, true, false, true, { value: 2})).to.be.revertedWith("wrong logic");
+      await expect(contract.connect(addr3).bet(0, 1, false, false, false, { value: 2})).to.be.revertedWith("wrong logic");
     });
 
     it('Should execute transaction wrong leverage and value', async function () {      
@@ -247,12 +243,16 @@ describe('nft contract', function () {
     it('Should claim normaly', async function () {    
       expect(await ethers.provider.getBalance(contract.address)).to.equal(1080); 
       await contract.connect(addr1).claim(0, 0);
+      expect(await contract.idAddressBetIsClaim(0, addr1.address, 0)).to.equal(true); 
       expect(await ethers.provider.getBalance(contract.address)).to.equal(1080 - 270); 
 
+      expect(await contract.idAddressBetIsClaim(0, addr1.address, 1)).to.equal(false); 
       await contract.connect(addr1).claim(0, 1); 
+      expect(await contract.idAddressBetIsClaim(0, addr1.address, 1)).to.equal(true); 
       expect(await ethers.provider.getBalance(contract.address)).to.equal(1080 - 270 - 540); 
 
       await expect(contract.connect(addr2).claim(0, 0)).to.be.revertedWith("not eligible"); 
+      expect(await contract.idAddressBetIsClaim(0, addr2.address, 0)).to.equal(false);
       expect(await ethers.provider.getBalance(contract.address)).to.equal(1080 - 270 - 540); 
 
       await expect(contract.connect(addr3).claim(0, 0)).to.be.revertedWith("not eligible"); 
@@ -276,13 +276,11 @@ describe('nft contract', function () {
       expect(await ethers.provider.getBalance(contract.address)).to.equal(1080 - 270); 
     });
 
-    
-
     it('Should cant claim with no result', async function () { 
       const time = Number((await contract.getTimestamp()).toString()) + 1000;
       await contract.connect(owner).setMatch(5, true, 100, time, 10)
       await contract.connect(addr1).bet(5, 1, true, false, false, { value: 100})
-      await expect(contract.connect(addr1).claim(5, 0)).to.be.revertedWith("not eligible");
+      await expect(contract.connect(addr1).claim(5, 0)).to.be.reverted;
     });
 
     it('Should cant claim if time nor start', async function () { 
@@ -291,7 +289,95 @@ describe('nft contract', function () {
       await contract.connect(addr1).bet(6, 1, true, false, false, { value: 100})
       await contract.connect(owner).setResult(6, true, false, false)
       await expect(contract.connect(addr1).claim(6, 0)).to.be.revertedWith("out time");
+      expect(await contract.idAddressBetIsClaim(6, addr1.address, 0)).to.equal(false); 
     });
 
+    it('Should cant claim if match dont exist', async function () { 
+      await expect(contract.connect(addr1).claim(10, 0)).to.be.revertedWith("never participate");
+      expect(await contract.idAddressBetIsClaim(10, addr1.address, 0)).to.equal(false); 
+    });
+  });
+
+  describe('free bet', function () {
+    beforeEach(async function () {
+      [owner, addr1, addr2, addr3, ...addrs] = await ethers.getSigners();
+      precontract = await ethers.getContractFactory('Bc');
+      contract = await precontract.deploy();
+      const time = Number((await contract.getTimestamp()).toString()) + 1000;
+      await contract.connect(owner).setMatch(0, true, 100, time, 10) 
+    });
+
+    it('Should set free bet by owner', async function () {  
+      expect(await contract.addressCanFreeBet(addr3.address)).to.equal(false);   
+      await contract.connect(owner).setFreeBet(addr3.address, true)
+      expect(await contract.addressCanFreeBet(addr3.address)).to.equal(true); 
+      await contract.connect(owner).setFreeBet(addr3.address, false)
+      expect(await contract.addressCanFreeBet(addr3.address)).to.equal(false); 
+    });
+
+    it('Should cant set free bet by no owner', async function () {  
+      expect(await contract.addressCanFreeBet(addr3.address)).to.equal(false);   
+      await expect(contract.connect(addr1).setFreeBet(addr3.address, true)).to.be.revertedWith("Ownable: caller is not the owner")
+      expect(await contract.addressCanFreeBet(addr3.address)).to.equal(false); 
+    });
+
+    it('Should can free bet if user is allowed', async function () {  
+      await contract.connect(owner).setFreeBet(addr3.address, true)
+
+      await contract.connect(addr1).bet(0, 1, true, false, false, { value: 100})
+      await contract.connect(addr2).bet(0, 2, false, true, false, { value: 200})
+      await contract.connect(addr3).freeBet(0, false, true, false)
+
+      expect((await contract.idData(0)).pricePool).to.equal(270);
+      expect((await contract.idData(0)).inA).to.equal(1);
+      expect((await contract.idData(0)).inB).to.equal(3);
+      expect((await contract.idData(0)).inEquality).to.equal(0); 
+
+      expect(await contract.idAddressBetLeverage(0, addr3.address, 0)).to.equal(1);  
+      expect((await contract.idAddressBetResult(0, addr3.address, 0)).winA).to.equal(false);
+      expect((await contract.idAddressBetResult(0, addr3.address, 0)).winB).to.equal(true);
+      expect((await contract.idAddressBetResult(0, addr3.address, 0)).equality).to.equal(false);
+      expect(await contract.idAddressNbrbet(0, addr3.address)).to.equal(1); 
+    });
+
+    it('Should cant free bet two time', async function () {  
+      await contract.connect(owner).setFreeBet(addr3.address, true)
+
+      await contract.connect(addr3).freeBet(0, false, true, false)
+      await expect(contract.connect(addr3).freeBet(0, false, true, false)).to.be.revertedWith("cant freebet")
+    });
+
+    it('Should cant free bet if user is not allowed', async function () {  
+      await expect(contract.connect(addr3).freeBet(0, false, true, false)).to.be.revertedWith("cant freebet")
+    });
+
+    it('Should not free bet if not active', async function () {   
+      await contract.connect(owner).setFreeBet(addr3.address, true);
+      await expect(contract.connect(addr3).freeBet(1, false, false, true)).to.be.revertedWith("not active");
+    });
+
+    it('Should not bet if wrong logic', async function () {   
+      await contract.connect(owner).setFreeBet(addr3.address, true);
+      await expect(contract.connect(addr3).freeBet(0, true, false, true)).to.be.revertedWith("wrong logic");
+      await expect(contract.connect(addr3).freeBet(0, false, false, false)).to.be.revertedWith("wrong logic");
+    });
+
+    it('Should claim normaly by free bettor', async function () {  
+      await contract.connect(owner).setFreeBet(addr3.address, true)
+
+      await contract.connect(addr1).bet(0, 1, true, false, false, { value: 100})
+      await contract.connect(addr2).bet(0, 2, false, true, false, { value: 200})
+      await contract.connect(addr3).freeBet(0, false, true, false)
+
+      await network.provider.send("evm_increaseTime", [1100]);
+      await network.provider.send("evm_mine"); 
+
+      await contract.connect(owner).setResult(0, false, true, false)
+      expect(await ethers.provider.getBalance(contract.address)).to.equal(270); 
+      await contract.connect(addr2).claim(0, 0);
+      expect(await ethers.provider.getBalance(contract.address)).to.equal(270 - 180); 
+      await contract.connect(addr3).claim(0, 0);
+      expect(await ethers.provider.getBalance(contract.address)).to.equal(0); 
+    });
   });
 });

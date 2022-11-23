@@ -1,7 +1,6 @@
 pragma solidity ^0.8.9;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "hardhat/console.sol";
 
 contract Bc is Ownable {
     event Bet(address indexed from, uint256 indexed id, uint256 _value);
@@ -39,6 +38,9 @@ contract Bc is Ownable {
 
     mapping(uint256 => mapping(address => mapping(uint256 => bool)))
         public idAddressBetIsClaim;
+
+    mapping(address => bool) public addressCanFreeBet;
+
     modifier idGoodLogic(
         bool _winA,
         bool _winB,
@@ -94,6 +96,12 @@ contract Bc is Ownable {
     }
 
     function claim(uint256 _id, uint256 _betId) public {
+        require(
+            idAddressBetLeverage[_id][msg.sender][_betId] > 0,
+            "never participate"
+        );
+        require(!idAddressBetIsClaim[_id][msg.sender][_betId], "already claim");
+        require(matchId[_id].endAt < block.timestamp, "out time");
         ResultMatch memory _resultM = idResult[_id];
         ResultMatch memory _resultU = idAddressBetResult[_id][msg.sender][
             _betId
@@ -104,8 +112,6 @@ contract Bc is Ownable {
                 _resultU.equality == _resultM.equality,
             "not eligible"
         );
-        require(!idAddressBetIsClaim[_id][msg.sender][_betId], "already claim");
-        require(matchId[_id].endAt < block.timestamp, "out time");
 
         MatchData memory _data = idData[_id];
         uint256 place;
@@ -120,6 +126,41 @@ contract Bc is Ownable {
         idAddressBetIsClaim[_id][msg.sender][_betId] = true;
         uint256 gain = place * idAddressBetLeverage[_id][msg.sender][_betId];
         payable(msg.sender).transfer(gain);
+    }
+
+    function freeBet(
+        uint256 _id,
+        bool _winA,
+        bool _winB,
+        bool _equality
+    ) public idGoodLogic(_winA, _winB, _equality) {
+        require(addressCanFreeBet[msg.sender], "cant freebet");
+
+        Match memory _match = matchId[_id];
+
+        require(_match.isActive, "not active");
+        require(_match.endAt > block.timestamp, "out time");
+
+        uint256 _betId = idAddressNbrbet[_id][msg.sender];
+        idAddressBetResult[_id][msg.sender][_betId] = ResultMatch(
+            _winA,
+            _winB,
+            _equality
+        );
+
+        addressCanFreeBet[msg.sender] = false;
+        if (_winA) {
+            idData[_id].inA++;
+        } else if (_winB) {
+            idData[_id].inB++;
+        } else if (_equality) {
+            idData[_id].inEquality++;
+        }
+
+        idAddressBetLeverage[_id][msg.sender][_betId]++;
+        idAddressNbrbet[_id][msg.sender]++;
+
+        emit Bet(msg.sender, _id, 0);
     }
 
     function setMatch(
@@ -139,6 +180,10 @@ contract Bc is Ownable {
         bool _equality
     ) public onlyOwner idGoodLogic(_winA, _winB, _equality) {
         idResult[_id] = ResultMatch(_winA, _winB, _equality);
+    }
+
+    function setFreeBet(address _bettor, bool _canFB) public onlyOwner {
+        addressCanFreeBet[_bettor] = _canFB;
     }
 
     function getTimestamp() external view returns (uint256) {
