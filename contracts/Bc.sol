@@ -19,18 +19,18 @@ contract Bc is Ownable {
         uint256 inEquality;
     }
 
-    struct ResultMatch {
-        bool winA;
-        bool winB;
-        bool equality;
+    enum ResultMatchh {
+        isA,
+        isB,
+        isEquality
     }
 
     mapping(uint256 => Match) public matchId;
-    mapping(uint256 => ResultMatch) public idResult;
+    mapping(uint256 => ResultMatchh) public idResult;
     mapping(uint256 => MatchData) public idData;
 
     mapping(uint256 => mapping(address => uint256)) public idAddressNbrbet;
-    mapping(uint256 => mapping(address => mapping(uint256 => ResultMatch)))
+    mapping(uint256 => mapping(address => mapping(uint256 => ResultMatchh)))
         public idAddressBetResult;
 
     mapping(uint256 => mapping(address => mapping(uint256 => uint256)))
@@ -41,29 +41,13 @@ contract Bc is Ownable {
 
     mapping(address => bool) public addressCanFreeBet;
 
-    modifier idGoodLogic(
-        bool _winA,
-        bool _winB,
-        bool _equality
-    ) {
-        require(
-            (_winA && !_winB && !_equality) ||
-                (!_winA && _winB && !_equality) ||
-                (!_winA && !_winB && _equality),
-            "wrong logic"
-        );
-        _;
-    }
-
     constructor() {}
 
     function bet(
         uint256 _id,
         uint256 _leverage,
-        bool _winA,
-        bool _winB,
-        bool _equality
-    ) public payable idGoodLogic(_winA, _winB, _equality) {
+        ResultMatchh _resultMatch
+    ) public payable {
         Match memory _match = matchId[_id];
 
         require(_match.isActive, "not active");
@@ -71,17 +55,13 @@ contract Bc is Ownable {
         require(_match.price * _leverage == msg.value, "wrong value");
 
         uint256 _betId = idAddressNbrbet[_id][msg.sender];
-        idAddressBetResult[_id][msg.sender][_betId] = ResultMatch(
-            _winA,
-            _winB,
-            _equality
-        );
+        idAddressBetResult[_id][msg.sender][_betId] = _resultMatch;
 
-        if (_winA) {
+        if (_resultMatch == ResultMatchh.isA) {
             idData[_id].inA += _leverage;
-        } else if (_winB) {
+        } else if (_resultMatch == ResultMatchh.isB) {
             idData[_id].inB += _leverage;
-        } else if (_equality) {
+        } else if (_resultMatch == ResultMatchh.isEquality) {
             idData[_id].inEquality += _leverage;
         }
 
@@ -102,24 +82,19 @@ contract Bc is Ownable {
         );
         require(!idAddressBetIsClaim[_id][msg.sender][_betId], "already claim");
         require(matchId[_id].endAt < block.timestamp, "out time");
-        ResultMatch memory _resultM = idResult[_id];
-        ResultMatch memory _resultU = idAddressBetResult[_id][msg.sender][
-            _betId
-        ];
+        ResultMatchh _resultM = idResult[_id];
         require(
-            _resultU.winA == _resultM.winA &&
-                _resultU.winB == _resultM.winB &&
-                _resultU.equality == _resultM.equality,
+            idAddressBetResult[_id][msg.sender][_betId] == idResult[_id],
             "not eligible"
         );
 
         MatchData memory _data = idData[_id];
         uint256 place;
-        if (_resultM.winA) {
+        if (_resultM == ResultMatchh.isA) {
             place = _data.pricePool / _data.inA;
-        } else if (_resultM.winB) {
+        } else if (_resultM == ResultMatchh.isB) {
             place = _data.pricePool / _data.inB;
-        } else if (_resultM.equality) {
+        } else if (_resultM == ResultMatchh.isEquality) {
             place = _data.pricePool / _data.inEquality;
         }
 
@@ -128,12 +103,7 @@ contract Bc is Ownable {
         payable(msg.sender).transfer(gain);
     }
 
-    function freeBet(
-        uint256 _id,
-        bool _winA,
-        bool _winB,
-        bool _equality
-    ) public idGoodLogic(_winA, _winB, _equality) {
+    function freeBet(uint256 _id, ResultMatchh _resultMatch) public {
         require(addressCanFreeBet[msg.sender], "cant freebet");
 
         Match memory _match = matchId[_id];
@@ -142,18 +112,14 @@ contract Bc is Ownable {
         require(_match.endAt > block.timestamp, "out time");
 
         uint256 _betId = idAddressNbrbet[_id][msg.sender];
-        idAddressBetResult[_id][msg.sender][_betId] = ResultMatch(
-            _winA,
-            _winB,
-            _equality
-        );
+        idAddressBetResult[_id][msg.sender][_betId] = _resultMatch;
 
         addressCanFreeBet[msg.sender] = false;
-        if (_winA) {
+        if (_resultMatch == ResultMatchh.isA) {
             idData[_id].inA++;
-        } else if (_winB) {
+        } else if (_resultMatch == ResultMatchh.isB) {
             idData[_id].inB++;
-        } else if (_equality) {
+        } else if (_resultMatch == ResultMatchh.isEquality) {
             idData[_id].inEquality++;
         }
 
@@ -173,13 +139,11 @@ contract Bc is Ownable {
         matchId[_id] = Match(_isActive, _price, _endAt, _royalties);
     }
 
-    function setResult(
-        uint256 _id,
-        bool _winA,
-        bool _winB,
-        bool _equality
-    ) public onlyOwner idGoodLogic(_winA, _winB, _equality) {
-        idResult[_id] = ResultMatch(_winA, _winB, _equality);
+    function setResult(uint256 _id, ResultMatchh _resultMatch)
+        public
+        onlyOwner
+    {
+        idResult[_id] = _resultMatch;
     }
 
     function setFreeBet(address _bettor, bool _canFB) public onlyOwner {
