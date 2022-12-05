@@ -4,7 +4,7 @@ import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 
 import { BigNumber, Contract } from 'ethers';
 
-describe('nft contract', function () {
+describe('contract bet', function () {
   let precontract: any;
   let contract: Contract;
   let owner: SignerWithAddress;
