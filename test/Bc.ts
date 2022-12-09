@@ -146,6 +146,10 @@ describe('contract bet', function () {
       await expect(contract.connect(addr3).bet(0, 1, 3, { value: 2})).to.be.reverted;
     });
 
+    it('Should not bet if leverage is 0', async function () {   
+      await expect(contract.connect(addr3).bet(0, 0, 1, { value: 0})).to.be.revertedWith("wrong leverage");
+    });
+
     it('Should execute transaction wrong leverage and value', async function () {      
       await expect(contract.connect(addr3).bet(0, 2, 2, { value: 2})).to.be.revertedWith("wrong value");
       await expect(contract.connect(addr3).bet(0, 2, 2, { value: 10})).to.be.revertedWith("wrong value");

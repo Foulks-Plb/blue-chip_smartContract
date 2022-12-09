@@ -49,7 +49,7 @@ contract Bc is Ownable {
         ResultMatchh _resultMatch
     ) public payable {
         Match memory _match = matchId[_id];
-
+        require(_leverage > 0, "wrong leverage");
         require(_match.isActive, "not active");
         require(_match.endAt > block.timestamp, "out time");
         require(_match.price * _leverage == msg.value, "wrong value");
