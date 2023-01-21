@@ -7,6 +7,8 @@ const {
   API_BINANCESCAN
 } = process.env;
 
+//0x9D78488f7112A8aC3eb0cC77d839105A70909902
+
 const config: HardhatUserConfig = {
   solidity: {
     version: "0.8.17",

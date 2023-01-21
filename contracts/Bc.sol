@@ -27,6 +27,7 @@ contract Bc is Ownable {
 
     mapping(uint256 => Match) public matchId;
     mapping(uint256 => ResultMatchh) public idResult;
+    mapping(uint256 => bool) public idResultIsSet;
     mapping(uint256 => MatchData) public idData;
 
     mapping(uint256 => mapping(address => uint256)) public idAddressNbrbet;
@@ -82,6 +83,7 @@ contract Bc is Ownable {
         );
         require(!idAddressBetIsClaim[_id][msg.sender][_betId], "already claim");
         require(matchId[_id].endAt < block.timestamp, "out time");
+        require(idResultIsSet[_id], "result not set");
         ResultMatchh _resultM = idResult[_id];
         require(
             idAddressBetResult[_id][msg.sender][_betId] == idResult[_id],
@@ -144,6 +146,7 @@ contract Bc is Ownable {
         onlyOwner
     {
         idResult[_id] = _resultMatch;
+        idResultIsSet[_id] = true;
     }
 
     function setFreeBet(address _bettor, bool _canFB) public onlyOwner {

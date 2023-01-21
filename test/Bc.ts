@@ -267,7 +267,7 @@ describe('contract bet', function () {
       await expect(contract.connect(addr1).claim(5, 0)).to.be.reverted;
     });
 
-    it('Should cant claim if time nor start', async function () { 
+    it('Should cant claim if time not start', async function () { 
       const time = Number((await contract.getTimestamp()).toString()) + 1000;
       await contract.connect(owner).setMatch(6, true, 100, time, 10)
       await contract.connect(addr1).bet(6, 1, 0, { value: 100})
@@ -280,6 +280,16 @@ describe('contract bet', function () {
       await expect(contract.connect(addr1).claim(10, 0)).to.be.revertedWith("never participate");
       expect(await contract.idAddressBetIsClaim(10, addr1.address, 0)).to.equal(false); 
     });
+
+    it('Should cant claim if result is not set', async function () {  // result is not set
+      const time = Number((await contract.getTimestamp()).toString()) + 1000;
+      await contract.connect(owner).setMatch(1, true, 100, time, 10)
+      await contract.connect(addr1).bet(1, 1, 0, { value: 100})
+      await network.provider.send("evm_increaseTime", [1100]);
+      await network.provider.send("evm_mine");
+      await expect(contract.connect(addr1).claim(1, 0)).to.be.revertedWith("result not set");
+    });
+    
   });
 
   describe('free bet', function () {
